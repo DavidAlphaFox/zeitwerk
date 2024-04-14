@@ -19,6 +19,8 @@ module Zeitwerk
     def initialize(root_file, namespace:, warn_on_extra_files:)
       super()
 
+      @namespace = namespace
+
       @tag = File.basename(root_file, ".rb")
       @tag = real_mod_name(namespace) + "-" + @tag unless namespace.equal?(Object)
 
@@ -47,7 +49,7 @@ module Zeitwerk
         next if abspath == expected_namespace_dir
 
         basename_without_ext = basename.delete_suffix(".rb")
-        cname = inflector.camelize(basename_without_ext, abspath).to_sym
+        cname = cname_for(basename_without_ext, abspath, real_mod_name(@namespace))
         ftype = dir?(abspath) ? "directory" : "file"
 
         warn(<<~EOS)

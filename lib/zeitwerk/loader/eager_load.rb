@@ -36,7 +36,7 @@ module Zeitwerk::Loader::EagerLoad
 
     raise Zeitwerk::Error.new("#{abspath} is not a directory") unless dir?(abspath)
 
-    cnames = []
+    paths = []
 
     root_namespace = nil
     walk_up(abspath) do |dir|
@@ -49,7 +49,7 @@ module Zeitwerk::Loader::EagerLoad
       return if hidden?(basename)
 
       unless collapse?(dir)
-        cnames << inflector.camelize(basename, dir).to_sym
+        paths << [basename, dir]
       end
     end
 
@@ -58,9 +58,10 @@ module Zeitwerk::Loader::EagerLoad
     return if @eager_loaded
 
     namespace = root_namespace
-    cnames.reverse_each do |cname|
+    paths.reverse_each do |basename, abspath|
       # Can happen if there are no Ruby files. This is not an error condition,
       # the directory is actually managed. Could have Ruby files later.
+      cname = cname_for(basename, abspath, real_mod_name(namespace))
       return unless cdef?(namespace, cname)
       namespace = cget(namespace, cname)
     end

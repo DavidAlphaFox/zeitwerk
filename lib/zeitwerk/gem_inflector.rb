@@ -9,8 +9,11 @@ module Zeitwerk
       @version_file = File.join(root_dir, namespace, "version.rb")
     end
 
-    # @sig (String, String) -> String
-    def camelize(basename, abspath)
+    # See the rationale for the third optional argument in
+    # Zeitwerk::Inflector#camelize.
+    #
+    # @sig (String, String, String?) -> String
+    def camelize(basename, abspath, _namespace_name = nil)
       abspath == @version_file ? "VERSION" : super
     end
   end

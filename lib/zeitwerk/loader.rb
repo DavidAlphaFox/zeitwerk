@@ -265,17 +265,18 @@ module Zeitwerk
 
       return unless root_namespace
 
-      if paths.empty?
-        real_mod_name(root_namespace)
-      else
-        cnames = paths.reverse_each.map { |b, a| cname_for(b, a) }
+      root_namespace_name = real_mod_name(root_namespace)
+      return root_namespace_name if paths.empty?
 
-        if root_namespace == Object
-          cnames.join("::")
-        else
-          "#{real_mod_name(root_namespace)}::#{cnames.join("::")}"
-        end
+      basename, abspath = paths.pop
+      cpath = cpath(root_namespace, cname_for(basename, abspath, root_namespace_name))
+      cpath = cpath.dup if cpath.frozen? # Symbol#name returns a frozen string.
+
+      paths.reverse_each do |b, a|
+        cpath << "::#{cname_for(b, a, cpath)}"
       end
+
+      cpath
     end
 
     # Says if the given constant path would be unloaded on reload. This
@@ -411,12 +412,12 @@ module Zeitwerk
       ls(dir) do |basename, abspath|
         if ruby?(basename)
           basename.delete_suffix!(".rb")
-          autoload_file(parent, cname_for(basename, abspath), abspath)
+          autoload_file(parent, cname_for(basename, abspath, real_mod_name(parent)), abspath)
         else
           if collapse?(abspath)
             define_autoloads_for_dir(abspath, parent)
           else
-            autoload_subdir(parent, cname_for(basename, abspath), abspath)
+            autoload_subdir(parent, cname_for(basename, abspath, real_mod_name(parent)), abspath)
           end
         end
       end

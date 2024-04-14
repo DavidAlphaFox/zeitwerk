@@ -146,8 +146,12 @@ module Zeitwerk::Loader::Helpers
 
   # @raise [Zeitwerk::NameError]
   # @sig (String, String) -> Symbol
-  private def cname_for(basename, abspath)
-    cname = inflector.camelize(basename, abspath)
+  private def cname_for(basename, abspath, namespace)
+    cname = if inflector.method(:camelize).arity == 3
+      inflector.camelize(basename, abspath, namespace)
+    else
+      inflector.camelize(basename, abspath)
+    end
 
     unless cname.is_a?(String)
       raise TypeError, "#{inflector.class}#camelize must return a String, received #{cname.inspect}"
