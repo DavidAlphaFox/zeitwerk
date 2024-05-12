@@ -165,8 +165,8 @@ module Zeitwerk::Loader::EagerLoad
     log("eager load directory #{dir} start") if logger
 
     queue = [[dir, namespace]]
-    while to_eager_load = queue.shift
-      dir, namespace = to_eager_load
+    until queue.empty?
+      dir, namespace = queue.shift
 
       ls(dir) do |basename, abspath|
         next if honour_exclusions && eager_load_exclusions.member?(abspath)
@@ -210,7 +210,9 @@ module Zeitwerk::Loader::EagerLoad
     next_dirs = []
 
     suffix.split("::").each do |segment|
-      while dir = dirs.shift
+      until dirs.empty?
+        dir = dirs.shift
+
         ls(dir) do |basename, abspath|
           next unless dir?(abspath)
 
