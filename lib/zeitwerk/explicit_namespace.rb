@@ -8,12 +8,11 @@ module Zeitwerk
   # Loaders that reopen namespaces owned by other projects are responsible for
   # loading their constant before setup. This is documented.
   module ExplicitNamespace # :nodoc: all
-    # Maps cpaths of explicit namespaces with their corresponding loader.
-    # Entries are added as the namespaces are found, and removed as they are
-    # autoloaded.
+    # Maps cnames to their corresponding namespace name and loader. Entries are
+    # added as the namespaces are found, and removed as they are autoloaded.
     #
-    # @sig Hash[String => Zeitwerk::Loader]
-    @cpaths = {}
+    # @sig Hash[Symbol => Hash[String, Zeitwerk::Loader]]
+    @cpaths = Hash.new { |h, k| h[k] = {} }
 
     class << self
       include RealModName
@@ -31,20 +30,23 @@ module Zeitwerk
       # is responsible.
       #
       # @sig (String, Zeitwerk::Loader) -> void
-      internal def register(cpath, loader)
-        @cpaths[cpath] = loader
+      internal def register(cref, loader)
+        @cpaths[cref.cname][real_mod_name(cref.mod)] = loader
       end
 
       # @sig (Zeitwerk::Loader) -> void
       internal def unregister_loader(loader)
-        @cpaths.delete_if { _2.equal?(loader) }
+        @cpaths.delete_if do |cname, h|
+          h.delete_if { _2.equal?(loader) }
+          h.empty?
+        end
       end
 
       # This is an internal method only used by the test suite.
       #
       # @sig (String) -> bool
-      internal def registered?(cpath)
-        @cpaths[cpath]
+      internal def registered?(mod, cname)
+        @cpaths.dig(cname, real_mod_name(mod))
       end
 
       # This is an internal method only used by the test suite.
@@ -59,30 +61,9 @@ module Zeitwerk
       #
       # @sig (String) -> Zeitwerk::Loader?
       private def loader_for(mod, cname)
-        # @cpaths.empty? is cheap and, depending on the code base, often true.
-        #
-        # Note that due to the way Zeitwerk works, namespaces are registered
-        # necessarily before their constant is defined, so the race codintion
-        # due to the gap from here to the delete call down below would not
-        # introduce a logic flaw.
-        #
-        # On one hand, if @cpaths is empty and a new entry is created after this
-        # check, it won't be for mod::cname anyway.
-        #
-        # On the other hand, if @cpaths is not empty, what happens with @cpaths
-        # during the gap is fine, because delete has the last word anyway.
-        return if @cpaths.empty?
-
-        # Module#const_added is triggered when an autoload is defined too. This
-        # callback is only for constants that are defined for real. In the case
-        # of inceptions we get a false nil, but this is covered in the loader by
-        # doing things in a certain order.
-        return if mod.autoload?(cname, false)
-
-        # I benchmarked this against using pairs [mod, cname] as keys, and
-        # strings won.
-        cpath = mod.equal?(Object) ? cname.name : "#{real_mod_name(mod)}::#{cname}"
-        @cpaths.delete(cpath)
+        if h = @cpaths[cname]
+          h.delete(real_mod_name(mod))
+        end
       end
 
       module Synchronized
