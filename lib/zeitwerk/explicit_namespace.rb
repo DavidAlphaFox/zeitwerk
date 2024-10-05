@@ -59,26 +59,6 @@ module Zeitwerk
       #
       # @sig (String) -> Zeitwerk::Loader?
       private def loader_for(mod, cname)
-        # @cpaths.empty? is cheap and, depending on the code base, often true.
-        #
-        # Note that due to the way Zeitwerk works, namespaces are registered
-        # necessarily before their constant is defined, so the race codintion
-        # due to the gap from here to the delete call down below would not
-        # introduce a logic flaw.
-        #
-        # On one hand, if @cpaths is empty and a new entry is created after this
-        # check, it won't be for mod::cname anyway.
-        #
-        # On the other hand, if @cpaths is not empty, what happens with @cpaths
-        # during the gap is fine, because delete has the last word anyway.
-        return if @cpaths.empty?
-
-        # Module#const_added is triggered when an autoload is defined too. This
-        # callback is only for constants that are defined for real. In the case
-        # of inceptions we get a false nil, but this is covered in the loader by
-        # doing things in a certain order.
-        return if mod.autoload?(cname, false)
-
         # I benchmarked this against using pairs [mod, cname] as keys, and
         # strings won.
         cpath = mod.equal?(Object) ? cname.name : "#{real_mod_name(mod)}::#{cname}"
