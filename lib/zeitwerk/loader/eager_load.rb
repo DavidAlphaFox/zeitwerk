@@ -169,7 +169,7 @@ module Zeitwerk::Loader::EagerLoad
         next if honour_exclusions && eager_load_exclusions.member?(abspath)
 
         if ftype == :file
-          if (cref = autoloads[abspath])
+          if cref = autoloads.cref_for(abspath)
             cref.get
           end
         else

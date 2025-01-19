@@ -5,6 +5,7 @@ require "set"
 
 module Zeitwerk
   class Loader
+    require_relative "loader/autoloads"
     require_relative "loader/helpers"
     require_relative "loader/callbacks"
     require_relative "loader/config"
@@ -21,14 +22,12 @@ module Zeitwerk
     MUTEX = Mutex.new
     private_constant :MUTEX
 
-    # Maps absolute paths for which an autoload has been set ---and not
-    # executed--- to their corresponding Zeitwerk::Cref object.
+    # Used by the loader to keep track of the autoloads it defines.
     #
-    #   "/Users/fxn/blog/app/models/user.rb"          => #<Zeitwerk::Cref:... @mod=Object, @cname=:User, ...>,
-    #   "/Users/fxn/blog/app/models/hotel/pricing.rb" => #<Zeitwerk::Cref:... @mod=Hotel, @cname=:Pricing, ...>,
-    #   ...
+    # To keep memory usage low, this collection grows and shrinks. Entries are
+    # added when autoloads are defined, and deleted when autoloads are executed.
     #
-    # @sig Hash[String, Zeitwerk::Cref]
+    # @sig Zeitwerk::Loader::Autoloads
     attr_reader :autoloads
     internal :autoloads
 
@@ -96,7 +95,7 @@ module Zeitwerk
     def initialize
       super
 
-      @autoloads       = {}
+      @autoloads       = Autoloads.new
       @autoloaded_dirs = []
       @to_unload       = {}
       @namespace_dirs  = Hash.new { |h, cpath| h[cpath] = [] }
@@ -151,7 +150,7 @@ module Zeitwerk
         # is enough.
         unloaded_files = Set.new
 
-        autoloads.each do |autoload_path, cref|
+        autoloads.each do |cref, autoload_path|
           if cref.autoload?
             unload_autoload(cref)
           else
@@ -456,7 +455,7 @@ module Zeitwerk
 
     # @sig (Module, Symbol, String) -> void
     private def autoload_subdir(cref, subdir)
-      if autoload_path = autoload_path_set_by_me_for?(cref)
+      if autoload_path = autoloads.autoload_path_for(cref)
         if ruby?(autoload_path)
           # Scanning visited a Ruby file first, and now a directory for the same
           # constant has been found. This means we are dealing with an explicit
@@ -485,7 +484,8 @@ module Zeitwerk
 
     # @sig (Module, Symbol, String) -> void
     private def autoload_file(cref, file)
-      if autoload_path = cref.autoload? || Registry.inception?(cref)
+      # See https://bugs.ruby-lang.org/issues/21035.
+      if autoload_path = cref.autoload? || autoloads.autoload_path_for(cref)
         # First autoload for a Ruby file wins, just ignore subsequent ones.
         if ruby?(autoload_path)
           shadowed_files << file
@@ -519,7 +519,8 @@ module Zeitwerk
 
     # @sig (Module, Symbol, String) -> void
     private def define_autoload(cref, autoload_path)
-      cref.autoload(autoload_path)
+      autoloads.define(cref, autoload_path)
+      Registry.register_autoload(self, autoload_path)
 
       if logger
         if ruby?(autoload_path)
@@ -527,23 +528,6 @@ module Zeitwerk
         else
           log("autoload set for #{cref}, to be autovivified from #{autoload_path}")
         end
-      end
-
-      autoloads[autoload_path] = cref
-      Registry.register_autoload(self, autoload_path)
-
-      # See why in the documentation of Zeitwerk::Registry.inceptions.
-      unless cref.autoload?
-        Registry.register_inception(cref, autoload_path, self)
-      end
-    end
-
-    # @sig (Module, Symbol) -> String?
-    private def autoload_path_set_by_me_for?(cref)
-      if autoload_path = cref.autoload?
-        autoload_path if autoloads.key?(autoload_path)
-      else
-        Registry.inception?(cref, self)
       end
     end
 
