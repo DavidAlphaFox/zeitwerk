@@ -21,16 +21,8 @@ module Zeitwerk
     MUTEX = Mutex.new
     private_constant :MUTEX
 
-    # Maps absolute paths for which an autoload has been set ---and not
-    # executed--- to their corresponding Zeitwerk::Cref object.
-    #
-    #   "/Users/fxn/blog/app/models/user.rb"          => #<Zeitwerk::Cref:... @mod=Object, @cname=:User, ...>,
-    #   "/Users/fxn/blog/app/models/hotel/pricing.rb" => #<Zeitwerk::Cref:... @mod=Hotel, @cname=:Pricing, ...>,
-    #   ...
-    #
-    # @sig Hash[String, Zeitwerk::Cref]
-    attr_reader :autoloads
-    internal :autoloads
+    attr_reader :implicit_namespaces
+    private :implicit_namespaces
 
     # We keep track of autoloaded directories to remove them from the registry
     # at the end of eager loading.
@@ -100,13 +92,13 @@ module Zeitwerk
     def initialize
       super
 
-      @autoloads       = {}
-      @autoloaded_dirs = []
-      @to_unload       = {}
-      @namespace_dirs  = Hash.new { |h, cpath| h[cpath] = [] }
-      @shadowed_files  = Set.new
-      @setup           = false
-      @eager_loaded    = false
+      @implicit_namespaces = Set.new
+      @autoloaded_dirs     = []
+      @to_unload           = {}
+      @namespace_dirs      = Hash.new { |h, cpath| h[cpath] = [] }
+      @shadowed_files      = Set.new
+      @setup               = false
+      @eager_loaded        = false
 
       @mutex = Mutex.new
       @dirs_autoload_monitor = Monitor.new
@@ -155,7 +147,7 @@ module Zeitwerk
         # is enough.
         unloaded_files = Set.new
 
-        autoloads.each do |abspath, cref|
+        Registry::Autoloads.unregister_all(self) do |cref, abspath|
           if cref.autoload?
             unload_autoload(cref)
           else
@@ -199,13 +191,15 @@ module Zeitwerk
           $LOADED_FEATURES.reject! { |file| unloaded_files.member?(file) }
         end
 
-        autoloads.clear
+        implicit_namespaces.clear
+        autoloaded_dirs.each do |dir|
+          Registry::Autoloads.unregister(dir)
+        end
         autoloaded_dirs.clear
         to_unload.clear
         namespace_dirs.clear
         shadowed_files.clear
 
-        Registry.on_unload(self)
         Registry::ExplicitNamespaces.__unregister_loader(self)
 
         @setup        = false
@@ -333,6 +327,7 @@ module Zeitwerk
     # @experimental
     # @sig () -> void
     def unregister
+      Registry::Autoloads.unregister_all(self)
       Registry.unregister_loader(self)
       Registry::ExplicitNamespaces.__unregister_loader(self)
     end
@@ -460,7 +455,7 @@ module Zeitwerk
 
     # @sig (Module, Symbol, String) -> void
     private def autoload_subdir(cref, subdir)
-      if autoload_path = autoload_path_set_by_me_for?(cref)
+      if autoload_path = Registry::Autoloads.autoload_path_set_by_loader_for(self, cref)
         if ruby?(autoload_path)
           # Scanning visited a Ruby file first, and now a directory for the same
           # constant has been found. This means we are dealing with an explicit
@@ -478,7 +473,7 @@ module Zeitwerk
       elsif !cref.defined?
         # First time we find this namespace, set an autoload for it.
         namespace_dirs[cref.path] << subdir
-        define_autoload(cref, subdir)
+        set_autoload_for_dir(cref, subdir)
       else
         # For whatever reason the constant that corresponds to this namespace has
         # already been defined, we have to recurse.
@@ -489,7 +484,7 @@ module Zeitwerk
 
     # @sig (Module, Symbol, String) -> void
     private def autoload_file(cref, file)
-      if autoload_path = cref.autoload? || Registry.inception?(cref)
+      if autoload_path = cref.autoload? || Registry::Autoloads.autoload_path_for(cref)
         # First autoload for a Ruby file wins, just ignore subsequent ones.
         if ruby?(autoload_path)
           shadowed_files << file
@@ -501,7 +496,7 @@ module Zeitwerk
         shadowed_files << file
         log("file #{file} is ignored because #{cref} is already defined") if logger
       else
-        define_autoload(cref, file)
+        set_autoload_for_file(cref, file)
       end
     end
 
@@ -510,45 +505,30 @@ module Zeitwerk
     #
     # @sig (dir: String, file: String, cref: Zeitwerk::Cref) -> void
     private def promote_namespace_from_implicit_to_explicit(dir:, file:, cref:)
-      autoloads.delete(dir)
-      Registry.unregister_autoload(dir)
+      implicit_namespaces.delete(cref.path)
+      Registry::Autoloads.unregister(dir)
 
       log("earlier autoload for #{cref} discarded, it is actually an explicit namespace defined in #{file}") if logger
 
       # Order matters: When Module#const_added is triggered by the autoload, we
       # don't want the namespace to be registered yet.
-      define_autoload(cref, file)
+      set_autoload_for_file(cref, file)
       register_explicit_namespace(cref)
     end
 
-    # @sig (Module, Symbol, String) -> void
-    private def define_autoload(cref, abspath)
-      cref.autoload(abspath)
-
-      if logger
-        if ruby?(abspath)
-          log("autoload set for #{cref}, to be loaded from #{abspath}")
-        else
-          log("autoload set for #{cref}, to be autovivified from #{abspath}")
-        end
-      end
-
-      autoloads[abspath] = cref
-      Registry.register_autoload(self, abspath)
-
-      # See why in the documentation of Zeitwerk::Registry.inceptions.
-      unless cref.autoload?
-        Registry.register_inception(cref, abspath, self)
-      end
+    # @sig (Zeitwerk::Cref, String) -> void
+    private def set_autoload_for_dir(cref, dir)
+      cref.autoload(dir)
+      Registry::Autoloads.register(loader: self, cref: cref, autoload_path: dir)
+      implicit_namespaces << cref.path
+      log("autoload set for #{cref}, to be autovivified from #{dir}") if logger
     end
 
-    # @sig (Module, Symbol) -> String?
-    private def autoload_path_set_by_me_for?(cref)
-      if autoload_path = cref.autoload?
-        autoload_path if autoloads.key?(autoload_path)
-      else
-        Registry.inception?(cref, self)
-      end
+    # @sig (Zeitwerk::Cref, String) -> void
+    private def set_autoload_for_file(cref, file)
+      cref.autoload(file)
+      Registry::Autoloads.register(loader: self, cref: cref, autoload_path: file)
+      log("autoload set for #{cref}, to be loaded from #{file}") if logger
     end
 
     # @sig (Zeitwerk::Cref) -> void

@@ -18,7 +18,7 @@ module Zeitwerk::Loader::EagerLoad
       end
 
       autoloaded_dirs.each do |autoloaded_dir|
-        Zeitwerk::Registry.unregister_autoload(autoloaded_dir)
+        Zeitwerk::Registry::Autoloads.unregister(autoloaded_dir)
       end
       autoloaded_dirs.clear
 
@@ -169,7 +169,7 @@ module Zeitwerk::Loader::EagerLoad
         next if honour_exclusions && eager_load_exclusions.member?(abspath)
 
         if ftype == :file
-          if (cref = autoloads[abspath])
+          if cref = Zeitwerk::Registry::Autoloads.cref_for(abspath)
             cref.get
           end
         else

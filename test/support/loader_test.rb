@@ -37,8 +37,7 @@ class LoaderTest < Minitest::Test
   def reset_registry
     Zeitwerk::Registry.loaders.clear
     Zeitwerk::Registry.gem_loaders_by_root_file.clear
-    Zeitwerk::Registry.autoloads.clear
-    Zeitwerk::Registry.inceptions.clear
+    Zeitwerk::Registry::Autoloads.clear
   end
 
   def reset_explicit_namespace

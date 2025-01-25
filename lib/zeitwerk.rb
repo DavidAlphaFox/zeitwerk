@@ -14,8 +14,8 @@ module Zeitwerk
   require_relative "zeitwerk/error"
   require_relative "zeitwerk/version"
 
-  require_relative "zeitwerk/core_ext/kernel"
   require_relative "zeitwerk/core_ext/module"
+  require_relative "zeitwerk/core_ext/kernel"
 
   # This is a dangerous method.
   #

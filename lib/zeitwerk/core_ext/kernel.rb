@@ -21,21 +21,25 @@ module Kernel
 
   # @sig (String) -> true | false
   def require(path)
-    if loader = Zeitwerk::Registry.loader_for(path)
+    # One way to write this would be to invoke `zeitwerk_original_require`
+    # first and then do our thing if the file was required, but this would not
+    # work well because we have autoloads for directories that would make
+    # Kernel#require to raise.
+    if loader_cref = ZEITWERK_REGISTRY_AUTOLOADS.loader_and_cref_for(path)
       if path.end_with?(".rb")
         required = zeitwerk_original_require(path)
-        loader.__on_file_autoloaded(path) if required
+        loader_cref[0].__on_file_autoloaded(path, loader_cref[1]) if required
         required
       else
-        loader.__on_dir_autoloaded(path)
+        loader_cref[0].__on_dir_autoloaded(path, loader_cref[1])
         true
       end
     else
       required = zeitwerk_original_require(path)
       if required
         abspath = $LOADED_FEATURES.last
-        if loader = Zeitwerk::Registry.loader_for(abspath)
-          loader.__on_file_autoloaded(abspath)
+        if loader_cref = ZEITWERK_REGISTRY_AUTOLOADS.loader_and_cref_for(abspath)
+          loader_cref[0].__on_file_autoloaded(abspath, loader_cref[1])
         end
       end
       required

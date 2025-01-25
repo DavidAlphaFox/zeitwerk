@@ -8,10 +8,8 @@ module Zeitwerk::Loader::Callbacks
   #
   # @raise [Zeitwerk::NameError]
   # @sig (String) -> void
-  internal def on_file_autoloaded(file)
-    cref = autoloads.delete(file)
-
-    Zeitwerk::Registry.unregister_autoload(file)
+  internal def on_file_autoloaded(file, cref)
+    ZEITWERK_REGISTRY_AUTOLOADS.unregister(file)
 
     if cref.defined?
       log("constant #{cref} loaded from file #{file}") if logger
@@ -38,7 +36,7 @@ module Zeitwerk::Loader::Callbacks
   # autoloaded.
   #
   # @sig (String) -> void
-  internal def on_dir_autoloaded(dir)
+  internal def on_dir_autoloaded(dir, cref)
     # Module#autoload does not serialize concurrent requires in CRuby < 3.2, and
     # we handle directories ourselves without going through Kernel#require, so
     # the callback needs to account for concurrency.
@@ -52,22 +50,21 @@ module Zeitwerk::Loader::Callbacks
     # the module object created by t2 wouldn't have any of the autoloads for its
     # children, since t1 would have correctly deleted its namespace_dirs entry.
     dirs_autoload_monitor.synchronize do
-      if cref = autoloads.delete(dir)
+      if implicit_namespaces.delete?(cref.path)
         implicit_namespace = cref.set(Module.new)
-        cpath = implicit_namespace.name
-        log("module #{cpath} autovivified from directory #{dir}") if logger
+        log("module #{cref.path} autovivified from directory #{dir}") if logger
 
-        to_unload[cpath] = [dir, cref] if reloading_enabled?
+        to_unload[cref.path] = [dir, cref] if reloading_enabled?
 
         # We don't unregister `dir` in the registry because concurrent threads
-        # wouldn't find a loader associated to it in Kernel#require and would
-        # try to require the directory. Instead, we are going to keep track of
-        # these to be able to unregister later if eager loading.
+        # wouldn't find a loader associated, and Kernel#require and would try to
+        # require the directory. Instead, we are going to keep track of these to
+        # be able to unregister later if eager loading.
         autoloaded_dirs << dir
 
         on_namespace_loaded(implicit_namespace)
 
-        run_on_load_callbacks(cpath, implicit_namespace, dir) unless on_load_callbacks.empty?
+        run_on_load_callbacks(cref.path, implicit_namespace, dir) unless on_load_callbacks.empty?
       end
     end
   end
