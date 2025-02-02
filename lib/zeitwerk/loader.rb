@@ -32,6 +32,10 @@ module Zeitwerk
     attr_reader :autoloads
     internal :autoloads
 
+    # @sig Hash[String, String]
+    attr_reader :inceptions
+    internal :inceptions
+
     # We keep track of autoloaded directories to remove them from the registry
     # at the end of eager loading.
     #
@@ -101,6 +105,7 @@ module Zeitwerk
       super
 
       @autoloads       = {}
+      @inceptions      = {}
       @autoloaded_dirs = []
       @to_unload       = {}
       @namespace_dirs  = Hash.new { |h, cpath| h[cpath] = [] }
@@ -205,8 +210,10 @@ module Zeitwerk
         namespace_dirs.clear
         shadowed_files.clear
 
+        unregister_inceptions
+        unregister_explicit_namespaces
+
         Registry.on_unload(self)
-        Registry::ExplicitNamespaces.__unregister_loader(self)
 
         @setup        = false
         @eager_loaded = false
@@ -333,8 +340,9 @@ module Zeitwerk
     # @experimental
     # @sig () -> void
     def unregister
+      unregister_inceptions
+      unregister_explicit_namespaces
       Registry.unregister_loader(self)
-      Registry::ExplicitNamespaces.__unregister_loader(self)
     end
 
     # The return value of this predicate is only meaningful if the loader has
@@ -489,7 +497,7 @@ module Zeitwerk
 
     # @sig (Module, Symbol, String) -> void
     private def autoload_file(cref, file)
-      if autoload_path = cref.autoload? || Registry.inception?(cref)
+      if autoload_path = cref.autoload? || Registry::Inceptions.registered?(cref.path)
         # First autoload for a Ruby file wins, just ignore subsequent ones.
         if ruby?(autoload_path)
           shadowed_files << file
@@ -536,10 +544,7 @@ module Zeitwerk
       autoloads[abspath] = cref
       Registry.register_autoload(self, abspath)
 
-      # See why in the documentation of Zeitwerk::Registry.inceptions.
-      unless cref.autoload?
-        Registry.register_inception(cref, abspath, self)
-      end
+      register_inception(cref, abspath) unless cref.autoload?
     end
 
     # @sig (Module, Symbol) -> String?
@@ -547,13 +552,29 @@ module Zeitwerk
       if autoload_path = cref.autoload?
         autoload_path if autoloads.key?(autoload_path)
       else
-        Registry.inception?(cref, self)
+        inceptions[cref.path]
       end
     end
 
     # @sig (Zeitwerk::Cref) -> void
     private def register_explicit_namespace(cref)
       Registry::ExplicitNamespaces.__register(cref, self)
+    end
+
+    private def unregister_explicit_namespaces
+      Registry::ExplicitNamespaces.__unregister_loader(self)
+    end
+
+    private def register_inception(cref, abspath)
+      inceptions[cref.path] = abspath
+      Registry::Inceptions.register(cref.path, abspath)
+    end
+
+    private def unregister_inceptions
+      inceptions.each_key do |cpath|
+        Registry::Inceptions.unregister(cpath)
+      end
+      inceptions.clear
     end
 
     # @sig (String) -> void
