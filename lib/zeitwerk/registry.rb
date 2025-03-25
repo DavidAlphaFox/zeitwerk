@@ -48,9 +48,16 @@ module Zeitwerk
       # file. That is how Zeitwerk::Loader.for_gem is idempotent.
       #
       # @private
-      #: (String, namespace: Module, warn_on_extra_files: boolish) -> Zeitwerk::Loader
-      def loader_for_gem(root_file, namespace:, warn_on_extra_files:)
-        gem_loaders_by_root_file[root_file] ||= GemLoader.__new(root_file, namespace: namespace, warn_on_extra_files: warn_on_extra_files)
+      #: (String, ?root_dir: String, ?namespace: Module, ?warn_on_extra_files: boolish) -> Zeitwerk::Loader
+      def loader_for_gem(root_file, root_dir: nil, namespace: Object, warn_on_extra_files: false)
+        gem_loaders_by_root_file[root_file] ||= begin
+          GemLoader.__new(
+            root_file,
+            root_dir: root_dir,
+            namespace: namespace,
+            warn_on_extra_files: warn_on_extra_files
+          )
+        end
       end
     end
 

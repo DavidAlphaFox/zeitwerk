@@ -5,8 +5,8 @@ module Zeitwerk
     #: (String) -> void
     def initialize(root_file)
       namespace     = File.basename(root_file, ".rb")
-      root_dir      = File.dirname(root_file)
-      @version_file = File.join(root_dir, namespace, "version.rb")
+      parent_dir    = File.dirname(root_file)
+      @version_file = File.join(parent_dir, namespace, "version.rb")
     end
 
     #: (String, String) -> String

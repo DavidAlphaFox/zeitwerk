@@ -10,23 +10,27 @@ module Zeitwerk
     private_class_method :new
 
     # @private
-    #: (String, namespace: Module, warn_on_extra_files: boolish) -> Zeitwerk::GemLoader
-    def self.__new(root_file, namespace:, warn_on_extra_files:)
-      new(root_file, namespace: namespace, warn_on_extra_files: warn_on_extra_files)
+    #: (String, root_dir: String?, namespace: Module?, warn_on_extra_files: boolish) -> Zeitwerk::GemLoader
+    def self.__new(root_file, root_dir:, namespace:, warn_on_extra_files:)
+      new(root_file, root_dir: root_dir, namespace: namespace, warn_on_extra_files: warn_on_extra_files)
     end
 
-    #: (String, namespace: Module, warn_on_extra_files: boolish) -> void
-    def initialize(root_file, namespace:, warn_on_extra_files:)
+    #: (String, root_dir: String?, namespace: Module?, warn_on_extra_files: boolish) -> void
+    def initialize(root_file, root_dir:, namespace:, warn_on_extra_files:)
       super()
 
-      @tag = File.basename(root_file, ".rb")
-      @tag = real_mod_name(namespace) + "-" + @tag unless namespace.equal?(Object)
+      @root_file = File.expand_path(root_file)
+      @root_dir  = root_dir || File.dirname(@root_file)
 
-      @inflector           = GemInflector.new(root_file)
-      @root_file           = File.expand_path(root_file)
-      @root_dir            = File.dirname(root_file)
+      @tag = @root_file.delete_prefix(@root_dir)
+      @tag.delete_prefix!("/")
+      @tag.delete_suffix!(".rb")
+      @tag.tr!("/", "-")
+      @tag = real_mod_name(namespace) + "-" + @tag if namespace != Object
+
       @warn_on_extra_files = warn_on_extra_files
 
+      @inflector = GemInflector.new(@root_file)
       push_dir(@root_dir, namespace: namespace)
     end
 

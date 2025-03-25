@@ -367,6 +367,7 @@ module Zeitwerk
 
     class << self
       include RealModName
+      include Helpers
 
       #: call(String) -> void | debug(String) -> void | nil
       attr_accessor :default_logger
@@ -389,7 +390,7 @@ module Zeitwerk
       #: (?warn_on_extra_files: boolish) -> Zeitwerk::GemLoader
       def for_gem(warn_on_extra_files: true)
         called_from = caller_locations(1, 1).first.path
-        Registry.loader_for_gem(called_from, namespace: Object, warn_on_extra_files: warn_on_extra_files)
+        Registry.loader_for_gem(called_from, warn_on_extra_files: warn_on_extra_files)
       end
 
       # This is a shortcut for
@@ -418,7 +419,25 @@ module Zeitwerk
         end
 
         called_from = caller_locations(1, 1).first.path
-        Registry.loader_for_gem(called_from, namespace: namespace, warn_on_extra_files: false)
+        Registry.loader_for_gem(called_from, namespace: namespace)
+      end
+
+      def for_namespaced_gem(lib = nil)
+        called_from = caller_locations(1, 1).first.path
+
+        lib = if lib
+          File.expand_path(lib)
+        else
+          walk_up(File.dirname(called_from)) do |abspath|
+            break abspath if File.basename(abspath) == "lib"
+          end
+        end
+
+        raise Zeitwerk::Error, "cannot find lib directory" unless lib
+
+        loader = Registry.loader_for_gem(called_from, root_dir: lib)
+        loader.ignore("#{lib}/*-*.rb")
+        loader
       end
 
       # Broadcasts `eager_load` to all loaders. Those that have not been setup
