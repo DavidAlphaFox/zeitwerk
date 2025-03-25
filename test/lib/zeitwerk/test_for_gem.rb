@@ -23,6 +23,8 @@ class TestForGem < LoaderTest
         yield
       end
     end
+
+    delete_loaded_feature("my_gem.rb")
   end
 
   test "sets things correctly" do
