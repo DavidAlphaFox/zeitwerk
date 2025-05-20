@@ -119,7 +119,7 @@ module Zeitwerk
       @mutex = Mutex.new
       @dirs_autoload_monitor = Monitor.new
 
-      Registry.loaders.register(self)
+      Registry.loaders.register(self)  ## 在loaders数组中加入自己
     end
 
     # Sets autoloads in the root namespaces.
@@ -463,12 +463,12 @@ module Zeitwerk
     end
 
     #: (String, Module) -> void
-    private def define_autoloads_for_dir(dir, parent)
+    private def define_autoloads_for_dir(dir, parent) ## 这里的Parent收Module的子类或者是Object
       ls(dir) do |basename, abspath, ftype|
         if ftype == :file
           basename.delete_suffix!(".rb")
-          cref = Cref.new(parent, cname_for(basename, abspath))
-          autoload_file(cref, abspath)
+          cref = Cref.new(parent, cname_for(basename, abspath)) ##创建一个Class Reference记录
+          autoload_file(cref, abspath) ## 加载文件
         else
           if collapse?(abspath)
             define_autoloads_for_dir(abspath, parent)
@@ -510,13 +510,13 @@ module Zeitwerk
     end
 
     #: (Zeitwerk::Cref, String) -> void
-    private def autoload_file(cref, file)
+    private def autoload_file(cref, file) ## 自动加载单个文件
       if autoload_path = cref.autoload? || Registry.inceptions.registered?(cref)
         # First autoload for a Ruby file wins, just ignore subsequent ones.
-        if ruby?(autoload_path)
+        if ruby?(autoload_path) ##如果有Ruby文件
           shadowed_files << file
           log("file #{file} is ignored because #{autoload_path} has precedence") if logger
-        else
+        else ## 没有Ruby文件
           promote_namespace_from_implicit_to_explicit(dir: autoload_path, file: file, cref: cref)
         end
       elsif cref.defined?
@@ -545,7 +545,7 @@ module Zeitwerk
 
     #: (Zeitwerk::Cref, String) -> void
     private def define_autoload(cref, abspath)
-      cref.autoload(abspath)
+      cref.autoload(abspath) ##在Module上定义自动加载
 
       if logger
         if ruby?(abspath)

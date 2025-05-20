@@ -109,16 +109,16 @@ module Zeitwerk::Loader::Config
   def push_dir(path, namespace: Object)
     unless namespace.is_a?(Module) # Note that Class < Module.
       raise Zeitwerk::Error, "#{namespace.inspect} is not a class or module object, should be"
-    end
+    end ##必须是一个Module
 
     unless real_mod_name(namespace)
       raise Zeitwerk::Error, "root namespaces cannot be anonymous"
-    end
+    end ## 必须有命名的空间
 
     abspath = File.expand_path(path)
     if dir?(abspath)
       raise_if_conflicting_directory(abspath)
-      roots[abspath] = namespace
+      roots[abspath] = namespace ## 为每一个路径设置一个namespace对象，默认是Object
     else
       raise Zeitwerk::Error, "the root directory #{abspath} does not exist"
     end

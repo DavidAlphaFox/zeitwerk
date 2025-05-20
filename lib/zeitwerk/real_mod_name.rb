@@ -13,7 +13,7 @@ module Zeitwerk::RealModName
   # a certain class or module of theirs.
   #
   #: (Module) -> String?
-  def real_mod_name(mod)
+  def real_mod_name(mod) ##  获取传入对象的真正名字
     UNBOUND_METHOD_MODULE_NAME.bind_call(mod)
   end
 end

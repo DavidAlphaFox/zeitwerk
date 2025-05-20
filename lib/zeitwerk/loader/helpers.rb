@@ -13,7 +13,7 @@ module Zeitwerk::Loader::Helpers
 
   #: (String) { (String, String, Symbol) -> void } -> void
   private def ls(dir)
-    children = Dir.children(dir)
+    children = Dir.children(dir) #获取指定目录的子项目
 
     # The order in which a directory is listed depends on the file system.
     #
@@ -105,7 +105,7 @@ module Zeitwerk::Loader::Helpers
 
   #: (String, String) -> Symbol ! Zeitwerk::NameError
   private def cname_for(basename, abspath)
-    cname = inflector.camelize(basename, abspath)
+    cname = inflector.camelize(basename, abspath) ##名字驼峰化
 
     unless cname.is_a?(String)
       raise TypeError, "#{inflector.class}#camelize must return a String, received #{cname.inspect}"
@@ -123,6 +123,7 @@ module Zeitwerk::Loader::Helpers
 
     begin
       CNAME_VALIDATOR.const_defined?(cname, false)
+      # 如果Const值没有找到，并且没有const_missing存在，这个方法会返回false
     rescue ::NameError => error
       path_type = ruby?(abspath) ? "file" : "directory"
 
@@ -139,7 +140,7 @@ module Zeitwerk::Loader::Helpers
           * Modify the inflector to handle this case.
       MESSAGE
     end
-
+    ## 返回字符串的sym
     cname.to_sym
   end
 end
